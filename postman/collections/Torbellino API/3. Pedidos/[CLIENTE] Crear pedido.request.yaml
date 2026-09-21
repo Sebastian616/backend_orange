@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{baseUrl}}/api/pedidos"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{clienteToken}}
+body:
+  type: text
+  content: |-
+    {
+      "mesa": "5",
+      "notas": "Sin azucar por favor",
+      "items": [
+        { "productoId": "{{productoId}}", "cantidad": 2 }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Pedido creado (201)', function () {
+          pm.response.to.have.status(201);
+      });
+      if (pm.response.code === 201) {
+          const body = pm.response.json();
+          pm.collectionVariables.set('pedidoId', body.id);
+      }
+    language: text/javascript
+order: 1000

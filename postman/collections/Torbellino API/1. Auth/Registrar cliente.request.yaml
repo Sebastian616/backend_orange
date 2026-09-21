@@ -1,0 +1,27 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "nombre": "Cliente de Prueba",
+      "email": "cliente.prueba@torbellino.com",
+      "password": "cliente123",
+      "telefono": "3001234567"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Registro exitoso (201)', function () {
+          pm.response.to.have.status(201);
+      });
+      if (pm.response.code === 201) {
+          const body = pm.response.json();
+          pm.collectionVariables.set('clienteToken', body.token);
+          pm.collectionVariables.set('clienteId', body.id);
+      }
+    language: text/javascript
+order: 1000

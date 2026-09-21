@@ -1,0 +1,9 @@
+$kind: collection
+description: "Pruebas de la API del cafe Torbellino: autenticacion, productos y pedidos. Ejecuta las carpetas en orden (Auth -> Productos -> Pedidos) para que los tokens e IDs se capturen automaticamente."
+variables:
+  baseUrl: http://localhost:8080
+  clienteToken: ""
+  adminToken: ""
+  clienteId: ""
+  productoId: ""
+  pedidoId: ""

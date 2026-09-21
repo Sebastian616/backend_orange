@@ -1,0 +1,29 @@
+$kind: http-request
+url: "{{baseUrl}}/api/admin/productos"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{adminToken}}
+body:
+  type: text
+  content: |-
+    {
+      "nombre": "Capuchino",
+      "descripcion": "Espresso con leche vaporizada",
+      "precio": 7000,
+      "imagenUrl": "",
+      "disponible": true,
+      "categoriaId": null
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Producto creado (201)', function () {
+          pm.response.to.have.status(201);
+      });
+      if (pm.response.code === 201) {
+          const body = pm.response.json();
+          pm.collectionVariables.set('productoId', body.id);
+      }
+    language: text/javascript
+order: 2000

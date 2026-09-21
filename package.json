@@ -1,0 +1,21 @@
+{
+  "name": "ecommerce-orange-backend",
+  "version": "1.0.0",
+  "description": "Backend de ecommerce de ropa deportiva para dama",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "db:init": "psql \"$DATABASE_URL\" -f database.sql",
+    "db:test": "node scripts/test-db.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.0"
+  }
+}

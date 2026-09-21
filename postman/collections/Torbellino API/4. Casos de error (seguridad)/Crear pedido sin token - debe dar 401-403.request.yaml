@@ -1,0 +1,21 @@
+$kind: http-request
+name: Crear pedido sin token -> debe dar 401/403
+url: "{{baseUrl}}/api/pedidos"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "mesa": "3",
+      "items": [ { "productoId": "{{productoId}}", "cantidad": 1 } ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Debe ser rechazado (401 o 403)', function () {
+          pm.expect([401, 403]).to.include(pm.response.code);
+      });
+    language: text/javascript
+order: 2000

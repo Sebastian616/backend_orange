@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/api/admin/productos/{{productoId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{adminToken}}
+body:
+  type: text
+  content: |-
+    {
+      "nombre": "Capuchino grande",
+      "descripcion": "Espresso con leche vaporizada, 400ml",
+      "precio": 8500,
+      "imagenUrl": "",
+      "disponible": true,
+      "categoriaId": null
+    }
+order: 4000

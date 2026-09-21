@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "admin@torbellino.com",
+      "password": "admin123"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Login admin exitoso (200)', function () {
+          pm.response.to.have.status(200);
+      });
+      if (pm.response.code === 200) {
+          const body = pm.response.json();
+          pm.collectionVariables.set('adminToken', body.token);
+      }
+    language: text/javascript
+order: 3000

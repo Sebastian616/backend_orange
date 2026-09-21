@@ -1,0 +1,8 @@
+$kind: http-request
+url: "{{baseUrl}}/api/admin/pedidos?estado=PENDIENTE"
+method: GET
+headers:
+  Authorization: Bearer {{adminToken}}
+queryParams:
+  estado: PENDIENTE
+order: 5000
