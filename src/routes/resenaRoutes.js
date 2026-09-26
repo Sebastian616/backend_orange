@@ -7,6 +7,7 @@ const {
   crear,
   actualizar,
   eliminar,
+  puedoResenar,
 } = require('../controllers/resenaController');
 const { requireAuth } = require('../middlewares/auth');
 
@@ -15,6 +16,7 @@ router.get('/productos/:productoId/resenas', listarPorProducto);
 router.get('/productos/:productoId/resenas/resumen', resumenPorProducto);
 
 // Rutas protegidas: solo usuarios autenticados
+router.get('/productos/:productoId/resenas/puedo-resenar', requireAuth, puedoResenar);
 router.post('/productos/:productoId/resenas', requireAuth, crear);
 router.put('/resenas/:id', requireAuth, actualizar);
 router.delete('/resenas/:id', requireAuth, eliminar);

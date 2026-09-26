@@ -61,6 +61,21 @@ async function crear(req, res) {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
+    // Solo puede reseñar quien tenga un pedido ENTREGADO que incluya este producto
+    const compraEntregada = await pool.query(
+      `SELECT 1
+       FROM pedido_detalle pd
+       JOIN pedidos p ON p.id = pd.pedido_id
+       WHERE pd.producto_id = $1 AND p.usuario_id = $2 AND p.estado = 'ENTREGADO'
+       LIMIT 1`,
+      [productoId, usuarioId]
+    );
+    if (compraEntregada.rows.length === 0) {
+      return res.status(403).json({
+        error: 'Solo puedes reseñar productos que hayas comprado y que ya te hayan entregado',
+      });
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO resenas (usuario_id, producto_id, calificacion, comentario)
        VALUES ($1, $2, $3, $4)
@@ -131,10 +146,44 @@ async function eliminar(req, res) {
   }
 }
 
+// GET /productos/:productoId/resenas/puedo-resenar  (requiere auth)
+// Le dice al frontend si debe mostrar el formulario de reseña:
+// - puedeResenar: compró el producto y ya se lo entregaron
+// - yaReseno: ya dejó una reseña antes (evita mostrar el form dos veces)
+async function puedoResenar(req, res) {
+  const { productoId } = req.params;
+  const usuarioId = req.usuario.id;
+
+  try {
+    const compraEntregada = await pool.query(
+      `SELECT 1
+       FROM pedido_detalle pd
+       JOIN pedidos p ON p.id = pd.pedido_id
+       WHERE pd.producto_id = $1 AND p.usuario_id = $2 AND p.estado = 'ENTREGADO'
+       LIMIT 1`,
+      [productoId, usuarioId]
+    );
+
+    const resenaExistente = await pool.query(
+      'SELECT id FROM resenas WHERE producto_id = $1 AND usuario_id = $2',
+      [productoId, usuarioId]
+    );
+
+    res.json({
+      puedeResenar: compraEntregada.rows.length > 0,
+      yaReseno: resenaExistente.rows.length > 0,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al verificar si puedes reseñar este producto' });
+  }
+}
+
 module.exports = {
   listarPorProducto,
   resumenPorProducto,
   crear,
   actualizar,
   eliminar,
+  puedoResenar,
 };
