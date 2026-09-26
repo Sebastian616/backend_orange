@@ -155,7 +155,7 @@ CREATE INDEX idx_pedido_detalle_pedido ON pedido_detalle(pedido_id);
 -- DATOS BASE (seed): tallas y categorías
 -- ---------------------------------------------------------------
 
-INSERT INTO tallas (nombre) VALUES ('XS'), ('S'), ('M'), ('L'), ('XL');
+INSERT INTO tallas (nombre) VALUES ('XS'), ('S'), ('M'), ('L'), ('XL'), ('Unica');
 
 INSERT INTO categorias (nombre)
-VALUES ('Leggings'), ('Tops'), ('Conjuntos'), ('Chaquetas'), ('Accesorios');
+VALUES ('Pantalones y leggings'), ('Enterizos'), ('Conjuntos'), ('Faldas'), ('Biker y short');

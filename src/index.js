@@ -15,7 +15,40 @@ const usuarioRoutes = require('./routes/usuarioRoutes');
 
 const app = express();
 
-app.use(cors());
+// Lista de orígenes permitidos (sitio web desplegado + entorno local)
+const origenesPermitidos = [
+  'https://www.stororange.lat',
+  'https://stororange.lat',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Si la petición no tiene origen (ej: Postman, cURL) o si el origen está en la lista blanca
+    if (!origin || origenesPermitidos.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true); // O cambiar por callback(new Error('No permitido por CORS')) para mayor rigidez
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Private-Network']
+}));
+
+// Permite peticiones de Red Privada (público HTTPS -> local HTTP)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  
+  // Responde inmediatamente a las solicitudes de verificación OPTIONS
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  
+  next();
+});
+
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ ok: true }));
@@ -36,7 +69,7 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Recurso no encontrado' });
 });
 
-// Manejador de errores genérico (por si algo se escapa de los try/catch)
+// Manejador de errores genérico
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ error: 'Error interno del servidor' });

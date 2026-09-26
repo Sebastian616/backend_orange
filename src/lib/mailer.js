@@ -1,16 +1,7 @@
 // lib/mailer.js
-//
-// Envío de correos con Resend (https://resend.com). Requiere:
-//   npm install resend
-//   RESEND_API_KEY en tu .env
-//   FRONTEND_URL en tu .env (ej: http://localhost:5173) para armar los links
-//
-// Mientras no tengas la API key configurada, este archivo solo imprime
-// el correo en consola — así puedes probar los flujos sin depender de
-// un servicio externo todavía.
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = process.env.FROM_EMAIL || 'onboarding@resend.dev';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'recuperacion@stororange.lat';
 
 let resend = null;
 if (RESEND_API_KEY) {
@@ -25,19 +16,26 @@ async function enviarCorreo({ to, subject, html }) {
     console.log('Asunto:', subject);
     console.log(html);
     console.log('----------------------------------------------------');
-    return;
+    return { dev: true };
   }
 
-  await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: FROM_EMAIL,
     to,
     subject,
     html,
   });
+
+  if (error) {
+    console.error('Error desde la API de Resend:', error);
+    throw new Error(`Error enviando correo: ${error.message}`);
+  }
+
+  return data;
 }
 
 function enviarCorreoVerificacion(correo, token) {
-  const link = `${process.env.FRONTEND_URL}/verificar-correo?token=${token}`;
+  const link = `${process.env.FRONTEND_URL}/#/verificar-correo?token=${token}`;
   return enviarCorreo({
     to: correo,
     subject: 'Verifica tu correo',
@@ -46,7 +44,7 @@ function enviarCorreoVerificacion(correo, token) {
 }
 
 function enviarCorreoResetPassword(correo, token) {
-  const link = `${process.env.FRONTEND_URL}/resetear-password?token=${token}`;
+  const link = `${process.env.FRONTEND_URL}/#/resetear-password?token=${token}`;
   return enviarCorreo({
     to: correo,
     subject: 'Recupera tu contraseña',
