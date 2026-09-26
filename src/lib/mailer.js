@@ -9,6 +9,9 @@ if (RESEND_API_KEY) {
   resend = new Resend(RESEND_API_KEY);
 }
 
+// Limpia el frontend URL para evitar dobles // en el enlace
+const BASE_URL = (process.env.FRONTEND_URL || 'https://www.stororange.lat').replace(/\/+$/, '');
+
 async function enviarCorreo({ to, subject, html }) {
   if (!resend) {
     console.log('--- Correo (modo desarrollo, sin RESEND_API_KEY) ---');
@@ -35,7 +38,7 @@ async function enviarCorreo({ to, subject, html }) {
 }
 
 function enviarCorreoVerificacion(correo, token) {
-  const link = `${process.env.FRONTEND_URL}/#/verificar-correo?token=${token}`;
+  const link = `${BASE_URL}/#/verificar-correo?token=${token}`;
   return enviarCorreo({
     to: correo,
     subject: 'Verifica tu correo',
@@ -44,7 +47,7 @@ function enviarCorreoVerificacion(correo, token) {
 }
 
 function enviarCorreoResetPassword(correo, token) {
-  const link = `${process.env.FRONTEND_URL}/#/resetear-password?token=${token}`;
+  const link = `${BASE_URL}/#/resetear-password?token=${token}`;
   return enviarCorreo({
     to: correo,
     subject: 'Recupera tu contraseña',
