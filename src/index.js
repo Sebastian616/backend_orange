@@ -15,7 +15,7 @@ const usuarioRoutes = require('./routes/usuarioRoutes');
 
 const app = express();
 
-// Lista de orígenes permitidos (sitio web desplegado + entorno local)
+// Lista de orígenes permitidos
 const origenesPermitidos = [
   'https://www.stororange.lat',
   'https://stororange.lat',
@@ -23,29 +23,29 @@ const origenesPermitidos = [
   'http://localhost:3000'
 ];
 
-app.use(cors({
+const opcionesCors = {
   origin: function (origin, callback) {
-    // Si la petición no tiene origen (ej: Postman, cURL) o si el origen está en la lista blanca
     if (!origin || origenesPermitidos.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, true); // O cambiar por callback(new Error('No permitido por CORS')) para mayor rigidez
+      callback(new Error('No permitido por la política de CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Private-Network']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Private-Network'],
+  optionsSuccessStatus: 204
+};
 
-// Permite peticiones de Red Privada (público HTTPS -> local HTTP)
+// 1. Aplicar la configuración de CORS globalmente
+app.use(cors(opcionesCors));
+
+// 2. Manejar de forma nativa con la librería cors todas las peticiones OPTIONS (Preflight)
+app.options('*', cors(opcionesCors));
+
+// 3. Encabezados adicionales si requiere soporte de red privada
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
-  
-  // Responde inmediatamente a las solicitudes de verificación OPTIONS
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  
   next();
 });
 
@@ -77,5 +77,5 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`API corriendo en http://localhost:${PORT}`);
+  console.log(`API corriendo en el puerto ${PORT}`);
 });
