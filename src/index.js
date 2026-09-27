@@ -15,7 +15,7 @@ const usuarioRoutes = require('./routes/usuarioRoutes');
 
 const app = express();
 
-// Lista de orígenes permitidos
+// 1. Configuración de orígenes permitidos
 const origenesPermitidos = [
   'https://www.stororange.lat',
   'https://stororange.lat',
@@ -28,22 +28,22 @@ const opcionesCors = {
     if (!origin || origenesPermitidos.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('No permitido por la política de CORS'));
+      callback(new Error('No permitido por CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Private-Network'],
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 200 // Usar 200 para maximizar compatibilidad con Preflight
 };
 
-// 1. Aplicar la configuración de CORS globalmente
+// 2. Aplicar CORS globalmente (maneja peticiones GET, POST, etc.)
 app.use(cors(opcionesCors));
 
-// 2. Manejar de forma nativa con la librería cors todas las peticiones OPTIONS (Preflight)
+// 3. Manejar explícitamente las peticiones OPTIONS con la misma configuración de CORS
 app.options('*', cors(opcionesCors));
 
-// 3. Encabezados adicionales si requiere soporte de red privada
+// 4. Soporte para Red Privada si se requiere
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
   next();
@@ -59,17 +59,15 @@ app.use('/direcciones', direccionRoutes);
 app.use('/favoritos', favoritoRoutes);
 app.use('/pedidos', pedidoRoutes);
 app.use('/productos', productoRoutes);
-app.use('/', productoTallaRoutes); // /productos/:id/tallas
-app.use('/', resenaRoutes);        // /productos/:id/resenas y /resenas/:id
+app.use('/', productoTallaRoutes);
+app.use('/', resenaRoutes);
 app.use('/tallas', tallaRoutes);
 app.use('/usuarios', usuarioRoutes);
 
-// 404 para rutas no encontradas
 app.use((req, res) => {
   res.status(404).json({ error: 'Recurso no encontrado' });
 });
 
-// Manejador de errores genérico
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ error: 'Error interno del servidor' });
