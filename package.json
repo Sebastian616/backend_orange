@@ -4,11 +4,11 @@
   "description": "Backend de ecommerce de ropa deportiva para dama",
   "main": "src/index.js",
   "type": "commonjs",
-  "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js",
-    "db:init": "psql \"$DATABASE_URL\" -f database.sql",
-    "db:test": "node scripts/test-db.js"
+"scripts": {
+  "dev": "node --watch src/index.js",
+  "start": "node src/index.js",
+  "db:init": "node scripts/init-db.js",
+  "db:test": "node --dns-result-order=ipv4first scripts/test-db.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
