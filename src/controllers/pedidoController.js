@@ -40,7 +40,7 @@ async function listarTodos(req, res) {
     }
 
     const { rows } = await pool.query(
-      `SELECT p.*, u.nombre AS usuario_nombre, u.correo AS usuario_correo
+      `SELECT p.*, u.nombre AS usuario_nombre, u.correo AS usuario_correo, u.whatsapp AS usuario_telefono
        FROM pedidos p
        JOIN usuarios u ON u.id = p.usuario_id
        ${where}
