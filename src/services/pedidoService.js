@@ -9,6 +9,12 @@ const ESTADOS_VALIDOS = [
   'CANCELADO',
 ];
 
+// Reglas de envío. El servidor es quien decide el costo: se ignora cualquier
+// costoEnvio que mande el frontend. Si cambias estos valores, cámbialos
+// también en el frontend (src/config/envio.js) para que la barra y el banner coincidan.
+const ENVIO_GRATIS_DESDE = 80000; // subtotal de productos, en pesos
+const COSTO_ENVIO_ESTANDAR = 8000;
+
 /**
  * Crea un pedido y descuenta el stock de cada producto/talla comprado.
  * Todo ocurre dentro de una transacción SQL: si falta stock de cualquier
@@ -18,9 +24,10 @@ const ESTADOS_VALIDOS = [
  * @param {string} params.usuarioId
  * @param {string} [params.direccionId]
  * @param {Array<{productoId: string, tallaId: string, cantidad: number}>} params.items
- * @param {number} [params.costoEnvio]
+ *
+ * El costo de envío NO se recibe: lo calcula el servidor (gratis desde ENVIO_GRATIS_DESDE).
  */
-async function crearPedido({ usuarioId, direccionId, items, costoEnvio = 0 }) {
+async function crearPedido({ usuarioId, direccionId, items }) {
   if (!items || items.length === 0) {
     throw new Error('El pedido debe tener al menos un producto');
   }
@@ -70,13 +77,15 @@ async function crearPedido({ usuarioId, direccionId, items, costoEnvio = 0 }) {
       });
     }
 
-    const total = subtotal + Number(costoEnvio);
+    // Envío gratis si el subtotal de productos llega al umbral
+    const costoEnvioFinal = subtotal >= ENVIO_GRATIS_DESDE ? 0 : COSTO_ENVIO_ESTANDAR;
+    const total = subtotal + costoEnvioFinal;
 
     const { rows: pedidoRows } = await client.query(
       `INSERT INTO pedidos (usuario_id, direccion_id, subtotal, costo_envio, total, estado)
        VALUES ($1, $2, $3, $4, $5, 'PENDIENTE')
        RETURNING *`,
-      [usuarioId, direccionId || null, subtotal, costoEnvio, total]
+      [usuarioId, direccionId || null, subtotal, costoEnvioFinal, total]
     );
     const pedido = pedidoRows[0];
 
