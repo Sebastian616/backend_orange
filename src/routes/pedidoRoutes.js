@@ -17,7 +17,7 @@ router.get('/', requireAuth, listarMios);
 // IMPORTANTE: esta ruta debe ir ANTES de '/:id', si no Express interpreta
 // "admin" como si fuera el :id
 router.get('/admin/todos', requireAuth, requireAdmin, listarTodos);
-
+router.get('/descuento-bienvenida', requireAuth, descuentoBienvenida);
 router.get('/:id', requireAuth, obtenerPorId);
 router.get('/:id/historial', requireAuth, obtenerHistorial);
 router.patch('/:id/estado', requireAuth, requireAdmin, cambiarEstado);

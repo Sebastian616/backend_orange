@@ -15,6 +15,28 @@ const ESTADOS_VALIDOS = [
 const ENVIO_GRATIS_DESDE = 80000; // subtotal de productos, en pesos
 const COSTO_ENVIO_ESTANDAR = 8000;
 
+// Descuento de bienvenida: % sobre el subtotal de productos, solo en la primera compra.
+const DESCUENTO_BIENVENIDA_PORCENTAJE = 10;
+
+/**
+ * ¿Es la primera compra de esta persona? Cuenta como "compra" cualquier pedido
+ * que no esté CANCELADO. Así el descuento desaparece apenas se crea el pedido,
+ * y si ese primer pedido se cancela, la persona recupera el descuento.
+ */
+async function esPrimeraCompra(usuarioId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT 1 FROM pedidos WHERE usuario_id = $1 AND estado <> 'CANCELADO' LIMIT 1`,
+    [usuarioId]
+  );
+  return rows.length === 0;
+}
+
+/** Para que el frontend sepa si debe mostrar el descuento en el carrito. */
+async function consultarDescuentoBienvenida(usuarioId) {
+  const disponible = await esPrimeraCompra(usuarioId);
+  return { disponible, porcentaje: DESCUENTO_BIENVENIDA_PORCENTAJE };
+}
+
 /**
  * Crea un pedido y descuenta el stock de cada producto/talla comprado.
  * Todo ocurre dentro de una transacción SQL: si falta stock de cualquier
@@ -35,6 +57,11 @@ async function crearPedido({ usuarioId, direccionId, items }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Bloquea la fila del usuario mientras dura la transacción: así dos pedidos
+    // simultáneos de la misma persona no pueden usar el descuento los dos.
+    await client.query('SELECT id FROM usuarios WHERE id = $1 FOR UPDATE', [usuarioId]);
+    const aplicaDescuento = await esPrimeraCompra(usuarioId, client);
 
     let subtotal = 0;
     const detalles = [];
@@ -77,15 +104,20 @@ async function crearPedido({ usuarioId, direccionId, items }) {
       });
     }
 
-    // Envío gratis si el subtotal de productos llega al umbral
+    // Descuento de bienvenida (solo primera compra), sobre el subtotal de productos
+    const descuento = aplicaDescuento
+      ? Math.round((subtotal * DESCUENTO_BIENVENIDA_PORCENTAJE) / 100)
+      : 0;
+
+    // Envío gratis si el subtotal de productos llega al umbral (se mide antes del descuento)
     const costoEnvioFinal = subtotal >= ENVIO_GRATIS_DESDE ? 0 : COSTO_ENVIO_ESTANDAR;
-    const total = subtotal + costoEnvioFinal;
+    const total = subtotal - descuento + costoEnvioFinal;
 
     const { rows: pedidoRows } = await client.query(
-      `INSERT INTO pedidos (usuario_id, direccion_id, subtotal, costo_envio, total, estado)
-       VALUES ($1, $2, $3, $4, $5, 'PENDIENTE')
+      `INSERT INTO pedidos (usuario_id, direccion_id, subtotal, descuento, costo_envio, total, estado)
+       VALUES ($1, $2, $3, $4, $5, $6, 'PENDIENTE')
        RETURNING *`,
-      [usuarioId, direccionId || null, subtotal, costoEnvioFinal, total]
+      [usuarioId, direccionId || null, subtotal, descuento, costoEnvioFinal, total]
     );
     const pedido = pedidoRows[0];
 
@@ -209,4 +241,4 @@ async function cambiarEstadoPedido({ pedidoId, nuevoEstado, comentario }) {
   }
 }
 
-module.exports = { crearPedido, listarPedidosUsuario, cambiarEstadoPedido };
+module.exports = { crearPedido, listarPedidosUsuario, cambiarEstadoPedido, consultarDescuentoBienvenida };

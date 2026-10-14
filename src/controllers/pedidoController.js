@@ -1,5 +1,10 @@
 const pool = require('../lib/db');
-const { crearPedido, listarPedidosUsuario, cambiarEstadoPedido } = require('../services/pedidoService');
+const { 
+  crearPedido, 
+  listarPedidosUsuario, 
+  cambiarEstadoPedido, 
+  consultarDescuentoBienvenida 
+} = require('../services/pedidoService');
 
 // POST /pedidos — requiere estar autenticado
 // body: { direccionId, items: [{ productoId, tallaId, cantidad }], costoEnvio }
@@ -52,6 +57,16 @@ async function listarTodos(req, res) {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al listar pedidos' });
+  }
+}
+
+// GET /pedidos/descuento-bienvenida — ¿todavía tiene su descuento de primera compra?
+async function descuentoBienvenida(req, res) {
+  try {
+    res.json(await consultarDescuentoBienvenida(req.usuario.id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al consultar el descuento' });
   }
 }
 
@@ -134,4 +149,12 @@ async function obtenerHistorial(req, res) {
   }
 }
 
-module.exports = { crear, listarMios, listarTodos, obtenerPorId, cambiarEstado, obtenerHistorial };
+module.exports = { 
+  crear, 
+  listarMios, 
+  listarTodos, 
+  descuentoBienvenida, 
+  obtenerPorId, 
+  cambiarEstado, 
+  obtenerHistorial 
+};
