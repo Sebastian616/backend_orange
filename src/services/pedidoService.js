@@ -13,7 +13,7 @@ const ESTADOS_VALIDOS = [
 // costoEnvio que mande el frontend. Si cambias estos valores, cámbialos
 // también en el frontend (src/config/envio.js) para que la barra y el banner coincidan.
 const ENVIO_GRATIS_DESDE = 80000; // subtotal de productos, en pesos
-const COSTO_ENVIO_ESTANDAR = 100;
+const COSTO_ENVIO_ESTANDAR = 10000;
 
 // Descuento de bienvenida: % sobre el subtotal de productos, solo en la primera compra.
 const DESCUENTO_BIENVENIDA_PORCENTAJE = 10;
