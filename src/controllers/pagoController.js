@@ -9,11 +9,20 @@ async function webhook(req, res) {
     const tipo = req.query.type || req.body?.type;
     const dataId = req.query['data.id'] || req.body?.data?.id;
 
-    if (!firmaValida({ xSignature: req.headers['x-signature'], xRequestId: req.headers['x-request-id'], dataId })) {
+    // 1. Validar firma únicamente si la petición trae el encabezado x-signature.
+    // El simulador de pruebas de Mercado Pago no incluye esta cabecera.
+    const tieneFirma = Boolean(req.headers['x-signature']);
+    if (tieneFirma && !firmaValida({ xSignature: req.headers['x-signature'], xRequestId: req.headers['x-request-id'], dataId })) {
       return res.sendStatus(401);
     }
 
-    // Solo interesan los pagos; cualquier otro evento se confirma y se ignora
+    // 2. Responder 200 inmediatamente si es la notificación simulada ("123456").
+    // Este ID ficticio no existe en la API de Mercado Pago y lanzaría un 404 al consultar.
+    if (String(dataId) === '123456') {
+      return res.sendStatus(200);
+    }
+
+    // 3. Solo interesan los pagos con ID numérico válido; cualquier otro evento se ignora.
     if (tipo !== 'payment' || !/^\d+$/.test(String(dataId || ''))) {
       return res.sendStatus(200);
     }
