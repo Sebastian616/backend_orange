@@ -11,8 +11,11 @@ class ErrorPago extends Error {
   }
 }
 
-// URL pública del backend (donde Mercado Pago avisa y adonde vuelve la persona tras pagar)
-const BACKEND_URL = (process.env.BACKEND_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
+// URL pública del backend
+const BACKEND_URL = (
+  process.env.BACKEND_URL || 'https://backend-orange.onrender.com'
+).trim().replace(/\/+$/, '');
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Mercado Pago pide las fechas con zona horaria. Colombia es UTC-5 todo el año (sin horario de verano).
@@ -24,7 +27,6 @@ function aIsoColombia(fecha) {
 /**
  * Crea la preferencia de pago en Mercado Pago para un pedido con tarjeta que sigue
  * PENDIENTE y devuelve la URL (initPoint) a la que hay que enviar a la persona.
- * El monto sale SIEMPRE de la base de datos, nunca de lo que mande el navegador.
  */
 async function iniciarPagoConTarjeta(pedidoId, usuarioId) {
   if (!mp.habilitado) {
@@ -49,29 +51,31 @@ async function iniciarPagoConTarjeta(pedidoId, usuarioId) {
   const ahora = new Date();
   const expira = new Date(ahora.getTime() + MINUTOS_PARA_PAGAR * 60 * 1000);
 
+  // Aseguramos que los datos del usuario no tengan espacios y estén limpios
+  const correoLimpio = String(pedido.usuario_correo || '').trim().toLowerCase();
+  const nombreLimpio = String(pedido.usuario_nombre || '').trim();
+
   const cuerpo = {
-    // Un solo ítem con el total del pedido (ya incluye descuento y envío), así
-    // nunca hay diferencias entre lo que se cobra y lo que guarda la base de datos.
     items: [
       {
-        id: pedido.id,
+        id: String(pedido.id),
         title: `Pedido Orange Store #${pedido.id.slice(0, 8)}`,
         quantity: 1,
         currency_id: 'COP',
         unit_price: Number(pedido.total),
       },
     ],
-    payer: { name: pedido.usuario_nombre, email: pedido.usuario_correo },
-    external_reference: pedido.id,
+    payer: {
+      name: nombreLimpio,
+      email: correoLimpio,
+    },
+    external_reference: String(pedido.id),
     back_urls: {
       success: `${BACKEND_URL}/pagos/retorno/exito`,
       failure: `${BACKEND_URL}/pagos/retorno/fallo`,
       pending: `${BACKEND_URL}/pagos/retorno/pendiente`,
     },
     auto_return: 'approved',
-    // Solo tarjetas: se excluyen PSE (bank_transfer) y Efecty (ticket).
-    // (El dinero en cuenta de Mercado Pago no se puede excluir.)
-    payment_methods: { excluded_payment_types: [{ id: 'ticket' }, { id: 'bank_transfer' }] },
     statement_descriptor: 'ORANGE STORE',
     expires: true,
     expiration_date_from: aIsoColombia(ahora),
@@ -95,9 +99,6 @@ async function iniciarPagoConTarjeta(pedidoId, usuarioId) {
 
 /**
  * Procesa un pago de Mercado Pago (llamado desde el webhook y desde la página de retorno).
- * IMPORTANTE: no se confía en lo que llega en la notificación; el pago se vuelve a
- * consultar a Mercado Pago con nuestro token y se compara contra el pedido.
- * Es idempotente: procesar el mismo pago dos veces no hace nada la segunda vez.
  */
 async function procesarPago(paymentId) {
   if (!mp.habilitado) throw new Error('Mercado Pago no está configurado');
@@ -118,7 +119,7 @@ async function procesarPago(paymentId) {
     if (!pedido || pedido.metodo_pago !== 'TARJETA') {
       resultado = { ignorado: 'el pedido no existe o no es de pago con tarjeta' };
     } else if (pago.status !== 'approved') {
-      resultado = { estadoPago: pago.status }; // pendiente / rechazado: no cambia nada
+      resultado = { estadoPago: pago.status };
     } else if (pago.currency_id !== 'COP' || Number(pago.transaction_amount) !== Number(pedido.total)) {
       await client.query(
         `INSERT INTO historial_estado_pedido (pedido_id, estado, comentario) VALUES ($1, $2, $3)`,
@@ -145,8 +146,6 @@ async function procesarPago(paymentId) {
       );
       resultado = { confirmado: true };
     } else if (pedido.estado === 'CANCELADO') {
-      // El pago llegó cuando el pedido ya estaba cancelado (y el stock devuelto): no se
-      // reactiva solo. Se deja constancia para que la tienda lo reembolse.
       await client.query(
         `UPDATE pedidos SET mp_pago_id = $1, pagado_at = now(), updated_at = now() WHERE id = $2`,
         [String(pago.id), pedido.id]
@@ -161,7 +160,6 @@ async function procesarPago(paymentId) {
       console.error(`Pago ${pago.id} aprobado para el pedido cancelado ${pedido.id}: requiere reembolso`);
       resultado = { requiereReembolso: true };
     } else {
-      // El pedido ya avanzó (enviado, entregado...): solo se guarda el id del pago
       await client.query(
         `UPDATE pedidos SET mp_pago_id = COALESCE(mp_pago_id, $1), pagado_at = COALESCE(pagado_at, now()) WHERE id = $2`,
         [String(pago.id), pedido.id]
@@ -181,8 +179,6 @@ async function procesarPago(paymentId) {
 
 /**
  * Valida la firma (x-signature) de un webhook de Mercado Pago.
- * Solo se exige si hay MP_WEBHOOK_SECRET y la notificación trae firma. La seguridad
- * real no depende de esto: procesarPago() vuelve a consultar el pago a Mercado Pago.
  */
 function firmaValida({ xSignature, xRequestId, dataId }) {
   const secreto = (process.env.MP_WEBHOOK_SECRET || '').trim();
