@@ -2,8 +2,8 @@ const { Router } = require('express');
 const {
   crear,
   listarMios,
-  listarTodos,
   descuentoBienvenida,
+  listarTodos,
   obtenerPorId,
   cambiarEstado,
   obtenerHistorial,
@@ -15,11 +15,13 @@ const router = Router();
 router.post('/', requireAuth, crear);
 router.get('/', requireAuth, listarMios);
 
-// Rutas estáticas ANTES de la ruta dinámica '/:id'
-router.get('/admin/todos', requireAuth, requireAdmin, listarTodos);
+// IMPORTANTE: también va ANTES de '/:id'
 router.get('/descuento-bienvenida', requireAuth, descuentoBienvenida);
 
-// Rutas dinámicas
+// IMPORTANTE: esta ruta debe ir ANTES de '/:id', si no Express interpreta
+// "admin" como si fuera el :id
+router.get('/admin/todos', requireAuth, requireAdmin, listarTodos);
+
 router.get('/:id', requireAuth, obtenerPorId);
 router.get('/:id/historial', requireAuth, obtenerHistorial);
 router.patch('/:id/estado', requireAuth, requireAdmin, cambiarEstado);

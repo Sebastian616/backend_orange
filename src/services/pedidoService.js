@@ -13,10 +13,26 @@ const ESTADOS_VALIDOS = [
 // costoEnvio que mande el frontend. Si cambias estos valores, cámbialos
 // también en el frontend (src/config/envio.js) para que la barra y el banner coincidan.
 const ENVIO_GRATIS_DESDE = 80000; // subtotal de productos, en pesos
-const COSTO_ENVIO_ESTANDAR = 10000;
+const COSTO_ENVIO_ESTANDAR = 8000;
 
 // Descuento de bienvenida: % sobre el subtotal de productos, solo en la primera compra.
 const DESCUENTO_BIENVENIDA_PORCENTAJE = 10;
+
+// Métodos de pago. EFECTIVO y TRANSFERENCIA: el pedido queda PENDIENTE y la tienda
+// confirma el pago. TARJETA: se cobra con Mercado Pago y el pedido pasa a CONFIRMADO
+// cuando el pago se aprueba.
+const METODOS_PAGO = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA'];
+const ETIQUETA_METODO = {
+  EFECTIVO: 'efectivo',
+  TRANSFERENCIA: 'transferencia',
+  TARJETA: 'tarjeta (Mercado Pago)',
+};
+
+// Los pedidos con tarjeta que no se paguen a tiempo se cancelan y el stock se devuelve.
+// El pago en Mercado Pago expira a los MINUTOS_PARA_PAGAR; se espera un margen extra
+// antes de cancelar, para no cancelar un pedido justo cuando alguien está pagando.
+const MINUTOS_PARA_PAGAR = 30;
+const MARGEN_CANCELACION_MIN = 5;
 
 /**
  * ¿Es la primera compra de esta persona? Cuenta como "compra" cualquier pedido
@@ -46,13 +62,23 @@ async function consultarDescuentoBienvenida(usuarioId) {
  * @param {string} params.usuarioId
  * @param {string} [params.direccionId]
  * @param {Array<{productoId: string, tallaId: string, cantidad: number}>} params.items
+ * @param {string} params.metodoPago - EFECTIVO | TRANSFERENCIA | TARJETA
  *
  * El costo de envío NO se recibe: lo calcula el servidor (gratis desde ENVIO_GRATIS_DESDE).
  */
-async function crearPedido({ usuarioId, direccionId, items }) {
+async function crearPedido({ usuarioId, direccionId, items, metodoPago }) {
   if (!items || items.length === 0) {
     throw new Error('El pedido debe tener al menos un producto');
   }
+  if (!METODOS_PAGO.includes(metodoPago)) {
+    throw new Error('Selecciona un método de pago válido (efectivo, transferencia o tarjeta)');
+  }
+
+  // Libera el stock de pedidos con tarjeta que nunca se pagaron. Si esto falla,
+  // no debe impedir la compra.
+  await cancelarPedidosTarjetaVencidos().catch((err) =>
+    console.error('No se pudieron limpiar los pedidos vencidos:', err)
+  );
 
   const client = await pool.connect();
   try {
@@ -114,10 +140,10 @@ async function crearPedido({ usuarioId, direccionId, items }) {
     const total = subtotal - descuento + costoEnvioFinal;
 
     const { rows: pedidoRows } = await client.query(
-      `INSERT INTO pedidos (usuario_id, direccion_id, subtotal, descuento, costo_envio, total, estado)
-       VALUES ($1, $2, $3, $4, $5, $6, 'PENDIENTE')
+      `INSERT INTO pedidos (usuario_id, direccion_id, subtotal, descuento, costo_envio, total, metodo_pago, estado)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDIENTE')
        RETURNING *`,
-      [usuarioId, direccionId || null, subtotal, descuento, costoEnvioFinal, total]
+      [usuarioId, direccionId || null, subtotal, descuento, costoEnvioFinal, total, metodoPago]
     );
     const pedido = pedidoRows[0];
 
@@ -131,8 +157,8 @@ async function crearPedido({ usuarioId, direccionId, items }) {
 
     await client.query(
       `INSERT INTO historial_estado_pedido (pedido_id, estado, comentario)
-       VALUES ($1, 'PENDIENTE', 'Pedido creado')`,
-      [pedido.id]
+       VALUES ($1, 'PENDIENTE', $2)`,
+      [pedido.id, `Pedido creado — pago: ${ETIQUETA_METODO[metodoPago]}`]
     );
 
     await client.query('COMMIT');
@@ -241,4 +267,41 @@ async function cambiarEstadoPedido({ pedidoId, nuevoEstado, comentario }) {
   }
 }
 
-module.exports = { crearPedido, listarPedidosUsuario, cambiarEstadoPedido, consultarDescuentoBienvenida };
+/**
+ * Cancela (y devuelve el stock de) los pedidos con tarjeta que siguen PENDIENTES,
+ * sin ningún pago asociado, y cuyo plazo para pagar ya venció.
+ * Se ejecuta antes de cada pedido nuevo y cada 10 minutos (ver index.js).
+ */
+async function cancelarPedidosTarjetaVencidos() {
+  const { rows } = await pool.query(
+    `SELECT id FROM pedidos
+     WHERE metodo_pago = 'TARJETA'
+       AND estado = 'PENDIENTE'
+       AND mp_pago_id IS NULL
+       AND COALESCE(pago_expira_at, created_at + interval '1 minute' * $1::int)
+           + interval '1 minute' * $2::int < now()`,
+    [MINUTOS_PARA_PAGAR, MARGEN_CANCELACION_MIN]
+  );
+
+  for (const { id } of rows) {
+    try {
+      await cambiarEstadoPedido({
+        pedidoId: id,
+        nuevoEstado: 'CANCELADO',
+        comentario: 'Pago con tarjeta no completado a tiempo',
+      });
+    } catch (err) {
+      console.error(`No se pudo cancelar el pedido vencido ${id}:`, err.message);
+    }
+  }
+  return rows.length;
+}
+
+module.exports = {
+  crearPedido,
+  listarPedidosUsuario,
+  cambiarEstadoPedido,
+  consultarDescuentoBienvenida,
+  cancelarPedidosTarjetaVencidos,
+  MINUTOS_PARA_PAGAR,
+};

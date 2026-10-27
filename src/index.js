@@ -6,31 +6,18 @@ const authRoutes = require('./routes/authRoutes');
 const categoriaRoutes = require('./routes/categoriaRoutes');
 const direccionRoutes = require('./routes/direccionRoutes');
 const favoritoRoutes = require('./routes/favoritoRoutes');
+const pagoRoutes = require('./routes/pagoRoutes');
 const pedidoRoutes = require('./routes/pedidoRoutes');
 const productoRoutes = require('./routes/productoRoutes');
 const productoTallaRoutes = require('./routes/productoTallaRoutes');
 const resenaRoutes = require('./routes/resenaRoutes');
 const tallaRoutes = require('./routes/tallaRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
+const { cancelarPedidosTarjetaVencidos } = require('./services/pedidoService');
 
 const app = express();
 
-// 1. Configuración de CORS Totalmente Permisiva para depuración
-app.use(cors({
-  origin: '*', // Permite cualquier origen de forma explícita
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['*'],
-  credentials: false // Requerido si origin es '*'
-}));
-
-// 2. Responder 200 OK a TODAS las peticiones OPTIONS inmediatamente
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', '*');
-  return res.sendStatus(200);
-});
-
+app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ ok: true }));
@@ -39,10 +26,11 @@ app.use('/auth', authRoutes);
 app.use('/categorias', categoriaRoutes);
 app.use('/direcciones', direccionRoutes);
 app.use('/favoritos', favoritoRoutes);
+app.use('/pagos', pagoRoutes); // webhook y retorno de Mercado Pago
 app.use('/pedidos', pedidoRoutes);
 app.use('/productos', productoRoutes);
-app.use('/', productoTallaRoutes);
-app.use('/', resenaRoutes);
+app.use('/', productoTallaRoutes); // /productos/:id/tallas
+app.use('/', resenaRoutes);        // /productos/:id/resenas y /resenas/:id
 app.use('/tallas', tallaRoutes);
 app.use('/usuarios', usuarioRoutes);
 
@@ -51,7 +39,7 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Recurso no encontrado' });
 });
 
-// Manejador de errores genérico
+// Manejador de errores genérico (por si algo se escapa de los try/catch)
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ error: 'Error interno del servidor' });
@@ -59,5 +47,8 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`API corriendo en el puerto ${PORT}`);
+  console.log(`API corriendo en http://localhost:${PORT}`);
+
+  // Cada 10 minutos cancela los pedidos con tarjeta que nunca se pagaron (y devuelve el stock)
+  setInterval(() => cancelarPedidosTarjetaVencidos().catch(console.error), 10 * 60 * 1000).unref();
 });

@@ -1,23 +1,48 @@
 const pool = require('../lib/db');
-const { 
-  crearPedido, 
-  listarPedidosUsuario, 
-  cambiarEstadoPedido, 
-  consultarDescuentoBienvenida 
+const {
+  crearPedido,
+  listarPedidosUsuario,
+  cambiarEstadoPedido,
+  consultarDescuentoBienvenida,
 } = require('../services/pedidoService');
+const { iniciarPagoConTarjeta } = require('../services/pagoService');
 
 // POST /pedidos — requiere estar autenticado
-// body: { direccionId, items: [{ productoId, tallaId, cantidad }], costoEnvio }
+// body: { direccionId, items: [{ productoId, tallaId, cantidad }], metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' }
+// El costo de envío y el descuento de primera compra los calcula el servidor.
+// Con TARJETA la respuesta incluye initPoint: la URL de Mercado Pago a la que hay que enviar a la persona.
 async function crear(req, res) {
-  const { direccionId, items, costoEnvio } = req.body;
+  const { direccionId, items, metodoPago } = req.body;
   const usuarioId = req.usuario.id;
 
+  let pedido;
   try {
-    const pedido = await crearPedido({ usuarioId, direccionId, items, costoEnvio });
-    res.status(201).json(pedido);
+    pedido = await crearPedido({ usuarioId, direccionId, items, metodoPago });
   } catch (err) {
     console.error(err);
-    res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: err.message });
+  }
+
+  if (metodoPago !== 'TARJETA') {
+    return res.status(201).json(pedido);
+  }
+
+  try {
+    const { initPoint } = await iniciarPagoConTarjeta(pedido.id, usuarioId);
+    return res.status(201).json({ ...pedido, initPoint });
+  } catch (err) {
+    console.error('No se pudo iniciar el pago con tarjeta:', err);
+    // Sin cobro no hay pedido: se cancela y se devuelve el stock
+    await cambiarEstadoPedido({
+      pedidoId: pedido.id,
+      nuevoEstado: 'CANCELADO',
+      comentario: 'No se pudo iniciar el pago con tarjeta',
+    }).catch((e) => console.error('No se pudo cancelar el pedido:', e));
+
+    const mensaje = err.status === 503
+      ? err.message
+      : 'No pudimos iniciar el pago con tarjeta. Intenta de nuevo o elige otro método de pago.';
+    return res.status(err.status === 503 ? 503 : 502).json({ error: mensaje });
   }
 }
 
@@ -29,6 +54,17 @@ async function listarMios(req, res) {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al listar pedidos' });
+  }
+}
+
+// GET /pedidos/descuento-bienvenida — ¿todavía tiene su descuento de primera compra?
+// Responde { disponible: boolean, porcentaje: number }
+async function descuentoBienvenida(req, res) {
+  try {
+    res.json(await consultarDescuentoBienvenida(req.usuario.id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al consultar el descuento' });
   }
 }
 
@@ -57,16 +93,6 @@ async function listarTodos(req, res) {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al listar pedidos' });
-  }
-}
-
-// GET /pedidos/descuento-bienvenida — ¿todavía tiene su descuento de primera compra?
-async function descuentoBienvenida(req, res) {
-  try {
-    res.json(await consultarDescuentoBienvenida(req.usuario.id));
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al consultar el descuento' });
   }
 }
 
@@ -149,12 +175,12 @@ async function obtenerHistorial(req, res) {
   }
 }
 
-module.exports = { 
-  crear, 
-  listarMios, 
-  listarTodos, 
-  descuentoBienvenida, 
-  obtenerPorId, 
-  cambiarEstado, 
-  obtenerHistorial 
+module.exports = {
+  crear,
+  listarMios,
+  descuentoBienvenida,
+  listarTodos,
+  obtenerPorId,
+  cambiarEstado,
+  obtenerHistorial,
 };
